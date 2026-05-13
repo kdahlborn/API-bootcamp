@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import todosRouter from './routes/todos.route';
+import todosRouter from './routes/todos.route.js';
+import { errorHandler } from './middlewares/errorHandler.middleware.js';
 
 // Config
 const app = express();
@@ -17,3 +18,5 @@ app.use('/api/todos', todosRouter);
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+
+app.use(errorHandler);
