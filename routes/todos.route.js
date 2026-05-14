@@ -1,13 +1,23 @@
 import { Router } from 'express';
-import { todos } from '../data/todos.js';
+import { todos } from '../data/todos.data.js';
+import { authenticateKey } from '../middlewares/auth.middleware.js';
 
 const router = Router();
 
 // GET todos
 router.get('/', (req, res) => {
+    const { completed } = req.query;
+    let filtered = [...todos];
+
+    if (completed !== undefined) {
+        filtered = filtered.filter(
+            (t) => t.completed === (completed === 'true'),
+        );
+    }
+
     res.json({
         success: true,
-        todos,
+        todos: filtered,
     });
 });
 
@@ -30,7 +40,7 @@ router.get('/:id', (req, res, next) => {
 });
 
 // POST new todo
-router.post('/', (req, res, next) => {
+router.post('/', authenticateKey, (req, res, next) => {
     const todo = req.body;
 
     if (!todo || Object.keys(todo).length === 0) {
@@ -56,7 +66,7 @@ router.post('/', (req, res, next) => {
 });
 
 // PATCH todo status
-router.patch('/:id', (req, res, next) => {
+router.patch('/:id', authenticateKey, (req, res, next) => {
     const { id } = req.params;
     const todo = todos.find((t) => t.id === id);
 
@@ -79,7 +89,7 @@ router.patch('/:id', (req, res, next) => {
 });
 
 // DELETE todo
-router.delete('/:id', (req, res, next) => {
+router.delete('/:id', authenticateKey, (req, res, next) => {
     const { id } = req.params;
     const deleted = todos.find((t) => t.id === id);
     const filtered = todos.filter((t) => t.id !== id);
