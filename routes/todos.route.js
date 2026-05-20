@@ -1,114 +1,113 @@
 import { Router } from 'express';
-import { todos } from '../data/todos.data.js';
-import { authenticateKey } from '../middlewares/auth.middleware.js';
+import {
+    authenticateKey,
+    authorizeTodo,
+    authorizeUser,
+} from '../middlewares/auth.middleware.js';
+import {
+    createTodo,
+    getTodos,
+    removeTodo,
+    updateTodo,
+} from '../services/todos.service.js';
 
 const router = Router();
 
+router.use(authenticateKey);
+
 // GET todos
-router.get('/', (req, res) => {
-    const { completed } = req.query;
-    let filtered = [...todos];
+router.get('/', async (req, res, next) => {
+    const result = await getTodos();
 
-    if (completed !== undefined) {
-        filtered = filtered.filter(
-            (t) => t.completed === (completed === 'true'),
-        );
-    }
-
-    res.json({
-        success: true,
-        todos: filtered,
-    });
-});
-
-// GET todos by ID
-router.get('/:id', (req, res, next) => {
-    const { id } = req.params;
-    const todo = todos.find((t) => t.id === id);
-
-    if (todo) {
+    if (result.success) {
         res.json({
             success: true,
-            todo,
+            todos: result.todos,
         });
     } else {
         next({
-            status: 400,
-            message: 'No todo with the corresponding id found',
+            status: 404,
+            message: result.message,
         });
     }
 });
 
 // POST new todo
-router.post('/', authenticateKey, (req, res, next) => {
-    const todo = req.body;
+router.post('/', authorizeUser, async (req, res, next) => {
+    const task = req.body;
 
-    if (!todo || Object.keys(todo).length === 0) {
-        return next({
+    if (!task) {
+        next({
             status: 400,
-            message: 'No todo provided in request body',
+            message: 'No task provided in request body',
         });
     }
 
-    const newTodo = {
-        id: crypto.randomUUID().substring(0, 5),
-        ...todo,
-        completed: false,
-    };
-
-    todos.push(newTodo);
-
-    res.status(201).json({
-        success: true,
-        message: 'Todo added successfully',
-        todo: newTodo,
+    const result = await createTodo({
+        todoId: crypto.randomUUID().substring(0, 5),
+        ...task,
+        done: false,
+        userId: global.user.userId,
     });
-});
 
-// PATCH todo status
-router.patch('/:id', authenticateKey, (req, res, next) => {
-    const { id } = req.params;
-    const todo = todos.find((t) => t.id === id);
-
-    if (todo) {
-        todos.map((t) => {
-            if (t.id === id) t.completed = !t.completed;
-        });
-
-        res.json({
+    if (result.success) {
+        res.status(201).json({
             success: true,
-            message: 'Todo updated successfully',
-            todo,
+            todo: result.todo,
         });
     } else {
         next({
-            status: 400,
-            message: 'No todo with the corresponding id found',
+            status: 404,
+            message: result.message,
         });
     }
 });
+
+// PATCH todo
+router.patch(
+    '/:todoId',
+    authorizeUser,
+    authorizeTodo,
+    async (req, res, next) => {
+        const { todoId } = req.params;
+        const result = await updateTodo(todoId);
+
+        if (result.success) {
+            res.json({
+                success: true,
+                message: 'Todo updated successfully',
+                todo: result.todo,
+            });
+        } else {
+            next({
+                status: 400,
+                message: result.message,
+            });
+        }
+    },
+);
 
 // DELETE todo
-router.delete('/:id', authenticateKey, (req, res, next) => {
-    const { id } = req.params;
-    const deleted = todos.find((t) => t.id === id);
-    const filtered = todos.filter((t) => t.id !== id);
+router.delete(
+    '/:todoId',
+    authorizeUser,
+    authorizeTodo,
+    async (req, res, next) => {
+        const { todoId } = req.params;
+        const result = await removeTodo(todoId);
 
-    if (deleted) {
-        todos.length = 0;
-        todos.push(...filtered);
-
-        res.json({
-            success: true,
-            message: 'Todo deleted successfully',
-            todo: deleted,
-        });
-    } else {
-        next({
-            status: 400,
-            message: 'No todo with the corresponding id found',
-        });
-    }
-});
-
+        if (result.success) {
+            res.json({
+                success: true,
+                message: 'Todo removed successfully',
+                todo: result.todo,
+            });
+        } else {
+            next({
+                status: 404,
+                message: result.message,
+            });
+        }
+    },
+);
 export default router;

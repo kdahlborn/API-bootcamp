@@ -1,77 +1,70 @@
 import { Router } from 'express';
-import { users } from '../data/users.data.js';
-import { keys } from '../data/keys.data.js';
-import validate from '../middlewares/validate.middleware.js';
-import userSchema from '../validation/user.validation.js';
+import { getUser, registerUser } from '../services/users.service.js';
 
 const router = Router();
 
-// POST register
-router.post('/register', validate(userSchema), (req, res, next) => {
-    const { username, password } = req.body;
+// POST register user
+router.post('/register', async (req, res, next) => {
+    const user = req.body;
 
-    if (username && password) {
-        if (
-            users.some(
-                (u) => u.username.toLowerCase() === username.toLowerCase(),
-            )
-        ) {
-            next({
-                status: 403,
-                message: 'Username already exists',
-            });
-        } else {
-            const newUser = {
-                username,
-                password,
-            };
-
-            users.push(newUser);
-
-            res.status(201).json({
-                success: true,
-                message: 'New user registered successfully',
-                user: newUser,
-            });
-        }
-    } else {
+    if (!user) {
         next({
             status: 400,
-            message: 'Both username and password are required',
+            message: 'No user provided in request body',
+        });
+    }
+
+    const result = await registerUser({
+        userId: crypto.randomUUID().substring(0, 5),
+        ...user,
+    });
+
+    if (result.success) {
+        res.status(201).json({
+            success: true,
+            message: 'User registered successfully',
+            user: result.user,
+        });
+    } else {
+        next({
+            status: 401,
+            message: result.message,
         });
     }
 });
 
-// POST login
-router.post('/login', (req, res, next) => {
-    const { username, password } = req.body;
+// POST login user
+router.post('/login', async (req, res, next) => {
+    const user = req.body;
 
-    if (username && password) {
-        const user = users.find(
-            (u) => u.username.toLowerCase() === username.toLowerCase(),
-        );
+    if (!user) {
+        next({
+            status: 400,
+            message: 'No user provided in request body',
+        });
+    }
 
-        if (user && user.password === password) {
-            const key = keys[Math.floor(Math.random() * keys.length)];
+    const result = await getUser(user.username);
+
+    if (result.success) {
+        if (result.user.password === user.password) {
+            global.user = result.user;
 
             res.status(201).json({
                 success: true,
                 message: 'User logged in successfully',
-                user: {
-                    ...user,
-                    key,
-                },
+                user: result.user,
             });
         } else {
             next({
-                status: 403,
-                message: 'Incorrect username or password',
+                status: 401,
+                message: 'Invalid password',
             });
         }
     } else {
         next({
-            status: 400,
-            message: 'Both username and password are required',
+            status: 404,
+            message: result.message,
         });
     }
 });
